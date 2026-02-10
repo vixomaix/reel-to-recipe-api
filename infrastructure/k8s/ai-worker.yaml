@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-worker
+  namespace: reel-to-recipe
+  labels:
+    app: ai-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-worker
+  template:
+    metadata:
+      labels:
+        app: ai-worker
+    spec:
+      serviceAccountName: reel-to-recipe-sa
+      containers:
+        - name: worker
+          image: us-central1-docker.pkg.dev/YOUR_PROJECT_ID/reel-to-recipe-cluster-images/ai-worker:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: reel-to-recipe-config
+            - secretRef:
+                name: reel-to-recipe-secrets
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import sys; sys.exit(0)"
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-worker-hpa
+  namespace: reel-to-recipe
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-worker
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: redis_queue_length
+          selector:
+            matchLabels:
+              queue: ai_processing
+        target:
+          type: AverageValue
+          averageValue: "5"

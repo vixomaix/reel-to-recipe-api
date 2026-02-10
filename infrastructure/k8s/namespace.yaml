@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: reel-to-recipe
+  labels:
+    name: reel-to-recipe
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reel-to-recipe-sa
+  namespace: reel-to-recipe
+  annotations:
+    iam.gke.io/gcp-service-account: reel-to-recipe-app@YOUR_PROJECT_ID.iam.gserviceaccount.com

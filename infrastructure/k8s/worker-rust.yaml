@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-rust
+  namespace: reel-to-recipe
+  labels:
+    app: worker-rust
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: worker-rust
+  template:
+    metadata:
+      labels:
+        app: worker-rust
+    spec:
+      serviceAccountName: reel-to-recipe-sa
+      containers:
+        - name: worker
+          image: us-central1-docker.pkg.dev/YOUR_PROJECT_ID/reel-to-recipe-cluster-images/worker-rust:latest
+          imagePullPolicy: Always
+          command: ["./worker-rust", "worker"]
+          envFrom:
+            - configMapRef:
+                name: reel-to-recipe-config
+          env:
+            - name: OUTPUT_DIR
+              value: "/tmp/videos"
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          volumeMounts:
+            - name: video-cache
+              mountPath: /tmp/videos
+      volumes:
+        - name: video-cache
+          emptyDir:
+            sizeLimit: 10Gi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker-rust-hpa
+  namespace: reel-to-recipe
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker-rust
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: redis_queue_length
+          selector:
+            matchLabels:
+              queue: video_processing
+        target:
+          type: AverageValue
+          averageValue: "10"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60

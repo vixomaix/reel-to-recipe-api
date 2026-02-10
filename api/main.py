@@ -25,8 +25,8 @@ from slowapi.errors import RateLimitExceeded
 import structlog
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
-from ..src.main_v2 import ReelExtractorV2
-from ..src.config import AIProvider
+import os
+
 from .auth import verify_api_key, create_api_key, get_user_from_key
 from .rate_limiter import RateLimiter
 from .tasks import process_reel_task
@@ -44,6 +44,61 @@ from .models import (
 from .database import Database
 from .cache import Cache
 from .tracing import setup_tracing, get_tracer
+
+
+async def check_ai_provider_health() -> Dict[str, Any]:
+    """Check AI provider availability and return status."""
+    import aiohttp
+    
+    results = {}
+    timeout = aiohttp.ClientTimeout(total=5)
+    
+    # Check OpenAI
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                headers = {"Authorization": f"Bearer {openai_key}"}
+                async with session.get(
+                    "https://api.openai.com/v1/models",
+                    headers=headers
+                ) as resp:
+                    results["openai"] = {
+                        "available": resp.status == 200,
+                        "status_code": resp.status
+                    }
+        except Exception as e:
+            results["openai"] = {"available": False, "error": str(e)}
+    else:
+        results["openai"] = {"available": False, "error": "API key not configured"}
+    
+    # Check Anthropic
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                headers = {
+                    "x-api-key": anthropic_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                async with session.get(
+                    "https://api.anthropic.com/v1/models",
+                    headers=headers
+                ) as resp:
+                    results["anthropic"] = {
+                        "available": resp.status == 200,
+                        "status_code": resp.status
+                    }
+        except Exception as e:
+            results["anthropic"] = {"available": False, "error": str(e)}
+    else:
+        results["anthropic"] = {"available": False, "error": "API key not configured"}
+    
+    # Overall status: at least one provider available
+    any_available = any(r.get("available") for r in results.values())
+    results["overall"] = any_available
+    
+    return results
 
 # Configure structured logging
 structlog.configure(
@@ -239,15 +294,24 @@ async def custom_swagger_ui_html():
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with comprehensive service status."""
+    ai_health = await check_ai_provider_health()
+    
+    # Determine overall status
+    db_ok = await db.is_connected()
+    cache_ok = await cache.is_connected()
+    ai_ok = ai_health.get("overall", False)
+    
+    overall_status = "healthy" if (db_ok and cache_ok and ai_ok) else "degraded"
+    
     return HealthResponse(
-        status="healthy",
+        status=overall_status,
         version="2.0.0",
         timestamp=datetime.utcnow().isoformat(),
         services={
-            "database": await db.is_connected(),
-            "cache": await cache.is_connected(),
-            "ai_providers": True  # TODO: Check AI provider availability
+            "database": db_ok,
+            "cache": cache_ok,
+            "ai_providers": ai_health
         }
     )
 
