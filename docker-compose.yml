@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - reel-to-recipe
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGINS=*
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - reel-to-recipe
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker-rust:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker-rust
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - OUTPUT_DIR=/tmp/videos
+      - RUST_LOG=info
+    depends_on:
+      - redis
+    networks:
+      - reel-to-recipe
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+    volumes:
+      - video-cache:/tmp/videos
+
+  ai-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai-worker
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-opus-20240229}
+    depends_on:
+      - redis
+    networks:
+      - reel-to-recipe
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+volumes:
+  redis-data:
+  video-cache:
+
+networks:
+  reel-to-recipe:
+    driver: bridge

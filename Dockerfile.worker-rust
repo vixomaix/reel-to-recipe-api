@@ -1,0 +1,66 @@
+# Rust Worker Dockerfile
+FROM rust:1.75-slim as builder
+
+WORKDIR /app
+
+# Install dependencies for video processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    libtesseract-dev \
+    libleptonica-dev \
+    clang \
+    libavformat-dev \
+    libavcodec-dev \
+    libavutil-dev \
+    libavfilter-dev \
+    libavdevice-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Cargo files
+COPY worker-rust/Cargo.toml worker-rust/Cargo.lock* ./
+
+# Create dummy main.rs for dependency caching
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release && rm -rf src
+
+# Copy actual source code
+COPY worker-rust/src ./src
+
+# Build the application
+RUN cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    ffmpeg \
+    yt-dlp \
+    python3 \
+    python3-pip \
+    whisper \
+    libtesseract5 \
+    libavformat59 \
+    libavcodec59 \
+    libavutil57 \
+    libavfilter8 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create output directory
+RUN mkdir -p /tmp/videos
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/worker-rust /usr/local/bin/
+
+# Set environment
+ENV RUST_LOG=info
+ENV OUTPUT_DIR=/tmp/videos
+
+# Run the worker
+CMD ["worker-rust", "worker"]

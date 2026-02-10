@@ -1,0 +1,223 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "JobStatus": {
+      "type": "string",
+      "enum": ["pending", "downloading", "processing_video", "extracting_ocr", "transcribing_audio", "ai_processing", "completed", "failed"]
+    },
+    "ExtractRequest": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the Instagram Reel or TikTok video"
+        },
+        "platform": {
+          "type": "string",
+          "enum": ["instagram", "tiktok", "youtube_shorts"],
+          "description": "Source platform"
+        },
+        "preferred_language": {
+          "type": "string",
+          "default": "en",
+          "description": "Preferred language for recipe extraction"
+        }
+      },
+      "required": ["url"]
+    },
+    "JobResponse": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "$ref": "#/definitions/JobStatus"
+        },
+        "url": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "progress": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Processing progress percentage"
+        },
+        "error_message": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["job_id", "status", "url", "created_at"]
+    },
+    "VideoData": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "video_path": {
+          "type": "string",
+          "description": "Path to downloaded video file"
+        },
+        "duration_seconds": {
+          "type": "number"
+        },
+        "resolution": {
+          "type": "object",
+          "properties": {
+            "width": { "type": "integer" },
+            "height": { "type": "integer" }
+          }
+        },
+        "fps": {
+          "type": "number"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FrameData"
+          }
+        },
+        "audio_path": {
+          "type": ["string", "null"],
+          "description": "Path to extracted audio file"
+        },
+        "transcription": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["job_id", "video_path"]
+    },
+    "FrameData": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "number",
+          "description": "Timestamp in seconds"
+        },
+        "frame_path": {
+          "type": "string",
+          "description": "Path to extracted frame image"
+        },
+        "ocr_text": {
+          "type": ["string", "null"],
+          "description": "Text extracted from this frame via OCR"
+        },
+        "is_keyframe": {
+          "type": "boolean",
+          "description": "Whether this is a scene change keyframe"
+        }
+      },
+      "required": ["timestamp", "frame_path"]
+    },
+    "Recipe": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": ["string", "null"]
+        },
+        "ingredients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Ingredient"
+          }
+        },
+        "instructions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Instruction"
+          }
+        },
+        "cook_time_minutes": {
+          "type": ["integer", "null"]
+        },
+        "prep_time_minutes": {
+          "type": ["integer", "null"]
+        },
+        "servings": {
+          "type": ["integer", "null"]
+        },
+        "difficulty": {
+          "type": ["string", "null"],
+          "enum": ["easy", "medium", "hard", null]
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "source_url": {
+          "type": "string"
+        },
+        "thumbnail_url": {
+          "type": ["string", "null"]
+        },
+        "confidence_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": ["job_id", "title", "ingredients", "instructions", "source_url"]
+    },
+    "Ingredient": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": ["string", "null"]
+        },
+        "unit": {
+          "type": ["string", "null"]
+        },
+        "optional": {
+          "type": "boolean",
+          "default": false
+        },
+        "notes": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["name"]
+    },
+    "Instruction": {
+      "type": "object",
+      "properties": {
+        "step_number": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "timestamp_start": {
+          "type": ["number", "null"],
+          "description": "Video timestamp where this step begins"
+        },
+        "timestamp_end": {
+          "type": ["number", "null"],
+          "description": "Video timestamp where this step ends"
+        }
+      },
+      "required": ["step_number", "description"]
+    }
+  }
+}

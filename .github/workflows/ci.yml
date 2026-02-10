@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  api-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r api/requirements.txt
+        pip install black ruff mypy
+    
+    - name: Lint with ruff
+      run: ruff check api/
+    
+    - name: Format check with black
+      run: black --check api/
+    
+    - name: Type check with mypy
+      run: mypy api/
+
+  ai-worker-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r ai-worker/requirements.txt
+        pip install black ruff mypy
+    
+    - name: Lint with ruff
+      run: ruff check ai-worker/
+    
+    - name: Format check with black
+      run: black --check ai-worker/
+
+  rust-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libtesseract-dev libleptonica-dev \
+          libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev
+    
+    - name: Install Rust
+      uses: dtolnay/rust-action@stable
+    
+    - name: Check formatting
+      run: |
+        cd worker-rust
+        cargo fmt -- --check
+    
+    - name: Run clippy
+      run: |
+        cd worker-rust
+        cargo clippy -- -D warnings
+    
+    - name: Build
+      run: |
+        cd worker-rust
+        cargo build --release
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build API Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.api
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build AI Worker Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.ai-worker
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build Rust Worker Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.worker-rust
+        push: false
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

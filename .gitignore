@@ -1,0 +1,59 @@
+# Reel to Recipe API
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Rust
+worker-rust/target/
+worker-rust/Cargo.lock
+**/*.rs.bk
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application
+/tmp/videos/
+*.mp4
+*.wav
+*.jpg
+*.png
+output/
+
+# Environment
+.env
+.env.local
+
+# Docker
+.dockerignore
